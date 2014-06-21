@@ -348,6 +348,83 @@ class TransientNonlinearSolver(object):
         self.E_ = E_
         self.E_sol = E_sol
 
+class LMTransientNonlinearSolver(object):
+
+    def __init__(self, kappa, velocity, f, g, bcs, *args, **kwargs):
+        super(LMTransientNonlinearSolver, self).__init__()
+
+        # get time control parameters
+        time_control = kwargs['time_control']
+
+        t_a = time_control['t_a']
+        t_e = time_control['t_e']
+        dt = time_control['dt']
+        theta = time_control['theta']
+
+        E_sol = []
+
+        t = t_a
+        print('time: {} (start)'.format(t))
+
+        # get initial condition
+        E_init = kwargs['E_init']
+        E_init.t = t
+
+        E_surf = bcs[0]
+        E_surf.t = t_a
+
+        E_ = Function(W)  # most recently computed solution
+
+        c_i = EC.config['c_i']
+        k_i = EC.config['k_i']
+        kappa_0 = k_i / c_i / rho_i * spa 
+        
+        # We use the exact solution of the linear diffusion problem
+        # as an initial condition at t=t_a
+        E0 = interpolate(E_init, V)
+
+        E_prev = E0
+        E_sol.append(E0.vector().array())
+        t += dt
+
+        while t <= t_e:
+            print('time: {}'.format(t))
+            
+            # Update surface boundary condition
+            E_surf.t = t
+            bcs = [DirichletBC(V, E_surf, boundary_parts, 1)]
+
+            # E_(n+theta)
+            E_mid = (1.0-theta)*E_prev + theta*E
+
+            F = ((E-E_prev)*v*dx + dt*(inner(kappa*nabla_grad(E_mid), nabla_grad(v))*dx 
+                + inner(velocity*nabla_grad(E_mid), nabla_grad(v))*dx 
+                                       + f*v*dx - g*v*ds(2)))
+
+            F  = action(F, E_)
+            J = derivative(F, E_, E)
+
+            # Compute solution
+            problem = NonlinearVariationalProblem(F, E_, bcs, J)
+            solver  = NonlinearVariationalSolver(problem)
+            prm = solver.parameters
+            prm['newton_solver']['absolute_tolerance'] = 1E-8
+            prm['newton_solver']['relative_tolerance'] = 1E-7
+            prm['newton_solver']['maximum_iterations'] = 25
+            prm['newton_solver']['relaxation_parameter'] = 1.0
+            PROGRESS = 1
+            set_log_level(PROGRESS)
+            solver.solve()
+
+            t += dt
+
+            E_prev.assign(E_)
+            E_sol.append(E_.vector().array())
+        print('Time stepping done')
+
+        # Fixme: What should we return??
+        self.E_ = E_
+        self.E_sol = E_sol
 
 class Verification(object):
 
@@ -391,12 +468,17 @@ class Verification(object):
         E_surf = Expression('E_0 + delta_E_0*sin(2*pi/period*t)', E_0=E_0, delta_E_0=delta_E_0, period=period, t=t_a)
         # Basal boundary condition
         E_base = EC.getEnth(T_base, 0., p_air)
+
+        lm_constraint = DirichletBC(W.sub(1), 0.0, "abs(x[1])>2.0*DOLFIN_EPS")
+
         # Combine boundary conditions
-        bcs = [E_surf, E_base]
+        bcs = [E_surf, E_base, lm_constraint]
 
         # Define exact solution used as initial condition:
         E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
                              E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, t=t_a)
+
+
 
 
         transient_problem = DirichletBCTransientNonlinearSolver(Constant(kappa), Constant(velocity), f, g, bcs, E_init=E_exact, time_control=time_control)
@@ -469,7 +551,7 @@ nx = 1000
 mesh = IntervalMesh(nx, a, b)
 ele_order = 1
 V = FunctionSpace(mesh, 'Lagrange', ele_order)
-
+W = V*V
 
 c_i = 2009  # J kg-1 K-1
 c_w = 4170  # J kg-1 K-1
@@ -511,9 +593,10 @@ Gamma_d.mark(boundary_parts, 1)
 Gamma_g = LowerBoundary()
 Gamma_g.mark(boundary_parts, 2)
 
+
 # Define variational problem
-v  = TestFunction(V)
-E  = TrialFunction(V)
+v, v_lm  = TestFunction(W)
+E, lm  = TrialFunction(W)
 f = Constant(0.)
 ds = ds[boundary_parts]
 g = Constant(config['q_geo'])
@@ -537,9 +620,9 @@ period = 1
 T_plus  = T_surf+T_amplitude/2
 T_minus = T_surf-T_amplitude/2
 delta_E_0 = (EC.getEnth(T_plus, 0., p_air) - EC.getEnth(T_minus, 0., p_air))
-dt = 100
+dt = 5
 t_a = 0  # start at year zero
-t_e = 50000  # end at year one
+t_e = 10  # end at year one
 theta  = 0.5      # time stepping family, e.g. theta=1 -> backward Euler, theta=0.5 -> Crank-Nicolson
 
 time_control = dict(t_a=t_a, t_e=t_e, dt=dt, theta=theta)
@@ -582,8 +665,6 @@ else:
     ax = fig.add_subplot(111)
     depth = -z[::-1]
     T = EC.getAbsTemp(E_sol[0][::-1], p_air)
-    ax.plot(T, depth)
-    T = EC.getAbsTemp(E_sol[100][::-1], p_air)
     ax.plot(T, depth)
     T = EC.getAbsTemp(E_sol[-1][::-1], p_air)
     ax.plot(T, depth)
