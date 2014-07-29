@@ -17,6 +17,7 @@ from dolfin import *
 import sys
 import numpy as np
 import pylab as plt
+from argparse import ArgumentParser
 
 tol = 1E-14
 
@@ -399,7 +400,7 @@ class LMTransientNonlinearSolver(object):
 
             F = ((E-E_prev)*v*dx + dt*(inner(kappa*nabla_grad(E_mid), nabla_grad(v))*dx 
                 + inner(velocity*nabla_grad(E_mid), nabla_grad(v))*dx 
-                                       + f*v*dx - g*v*ds(2)))
+                + f*v*dx + (lm*v + (E-1000.)*v_lm*ds(2) - g*v*ds(2)))
 
             F  = action(F, E_)
             J = derivative(F, E_, E)
@@ -544,6 +545,14 @@ class Verification(object):
         self.steady_state_diffusion()
         self.transient_diffusion()
 
+# Set up the option parser
+parser = ArgumentParser()
+parser.description = "1-D enthalpy transport solver."
+parser.add_argument("--verify", dest="do_verification", action='store_true',
+                    help='''Run verification tests. Default=False.''', default=False)
+options = parser.parse_args()
+
+do_verification = options.do_verification
 
 a = 0
 b = 1000
@@ -633,8 +642,7 @@ bcs = [E_surf]
 acab = 1
 velocity = Expression('acab-acab/(b-a)*x[0]', acab=acab, a=a, b=b)
 
-do_verfication=False
-if do_verfication:
+if do_verification:
     verify = Verification(EC)
     verify.run()
 else:
@@ -648,7 +656,7 @@ else:
     E_exact = Expression('E_surf + q_geo/k_i*c_i*x[0]', E_surf=E_surf, q_geo=q_geo, k_i=k_i, c_i=c_i)
 
 
-    transient_problem = TransientNonlinearSolver(Constant(kappa), velocity, f, g, bcs, E_init=E_exact, time_control=time_control)
+    transient_problem = LMTransientNonlinearSolver(Constant(kappa), velocity, f, g, bcs, E_init=E_exact, time_control=time_control)
     E_sol = transient_problem.E_sol
 
     z = np.linspace(a, b, nx+1, endpoint=True)

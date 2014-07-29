@@ -17,6 +17,7 @@ from dolfin import *
 import sys
 import numpy as np
 import pylab as plt
+from argparse import ArgumentParser
 
 tol = 1E-14
 
@@ -463,6 +464,15 @@ class Verification(object):
         self.transient_diffusion()
 
 
+# Set up the option parser
+parser = ArgumentParser()
+parser.description = "1-D enthalpy transport solver."
+parser.add_argument("--verify", dest="do_verification", action='store_true',
+                    help='''Run verification tests. Default=False.''', default=False)
+options = parser.parse_args()
+
+do_verification = options.do_verification
+
 a = 0
 b = 1000
 nx = 1000
@@ -550,8 +560,7 @@ bcs = [E_surf]
 acab = 1
 velocity = Expression('acab-acab/(b-a)*x[0]', acab=acab, a=a, b=b)
 
-do_verfication=False
-if do_verfication:
+if do_verification:
     verify = Verification(EC)
     verify.run()
 else:
