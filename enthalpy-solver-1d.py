@@ -19,6 +19,7 @@ import numpy as np
 import pylab as plt
 from argparse import ArgumentParser
 
+set_log_level(ERROR)
 tol = 1E-14
 
 class EnthalpyConverter(object):
@@ -179,8 +180,6 @@ class SteadyStateNonlinearSolver(object):
         prm['newton_solver']['relative_tolerance'] = 1E-7
         prm['newton_solver']['maximum_iterations'] = 25
         prm['newton_solver']['relaxation_parameter'] = 1.0
-        PROGRESS = 16
-        set_log_level(PROGRESS)
         solver.solve()
 
         self.E_ = E_
@@ -206,10 +205,14 @@ class DirichletBCTransientNonlinearSolver(object):
         dt = time_control['dt']
         theta = time_control['theta']
 
-        E_sol = []
+        print('--------------------------------------------------------')
+        print('Running Transient Nonlinear Solver with Dirichlet BCs')
+        print('--------------------------------------------------------\n')
 
         t = t_a
         print('time: {} (start)'.format(t))
+
+        E_sol = []
 
         # get initial condition
         E_init = kwargs['E_init']
@@ -257,8 +260,6 @@ class DirichletBCTransientNonlinearSolver(object):
             prm['newton_solver']['relative_tolerance'] = 1E-7
             prm['newton_solver']['maximum_iterations'] = 25
             prm['newton_solver']['relaxation_parameter'] = 1.0
-            PROGRESS = 1
-            set_log_level(PROGRESS)
             solver.solve()
 
             t += dt
@@ -284,10 +285,14 @@ class TransientNonlinearSolver(object):
         dt = time_control['dt']
         theta = time_control['theta']
 
-        E_sol = []
+        print('--------------------------------------------------------')
+        print('Running Transient Nonlinear Solver')
+        print('--------------------------------------------------------')
 
         t = t_a
         print('time: {} (start)'.format(t))
+
+        E_sol = []
 
         # get initial condition
         E_init = kwargs['E_init']
@@ -335,8 +340,6 @@ class TransientNonlinearSolver(object):
             prm['newton_solver']['relative_tolerance'] = 1E-7
             prm['newton_solver']['maximum_iterations'] = 25
             prm['newton_solver']['relaxation_parameter'] = 1.0
-            PROGRESS = 1
-            set_log_level(PROGRESS)
             solver.solve()
 
             t += dt
@@ -385,33 +388,45 @@ class Verification(object):
         dt = 1./12
         t_a = 0  # start at year zero
         t_e = 1  # end at year one
-        theta = 0.5
-        time_control = dict(t_a=t_a, t_e=t_e, dt=dt, theta=theta)
 
-        # Surface boundary condition
-        E_surf = Expression('E_0 + delta_E_0*sin(2*pi/period*t)', E_0=E_0, delta_E_0=delta_E_0, period=period, t=t_a)
-        # Basal boundary condition
-        E_base = EC.getEnth(T_base, 0., p_air)
-        # Combine boundary conditions
-        bcs = [E_surf, E_base]
+        thetas = [0.5, 1.0]
+        E_sols = []
+        for theta in thetas:
+            time_control = dict(t_a=t_a, t_e=t_e, dt=dt, theta=theta)
 
-        # Define exact solution used as initial condition:
-        E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
-                             E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, t=t_a)
+            # Surface boundary condition
+            E_surf = Expression('E_0 + delta_E_0*sin(2*pi/period*t)', E_0=E_0, delta_E_0=delta_E_0, period=period, t=t_a)
+            # Basal boundary condition
+            E_base = EC.getEnth(T_base, 0., p_air)
+            # Combine boundary conditions
+            bcs = [E_surf, E_base]
+
+            # Define exact solution used as initial condition:
+            E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
+                                 E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, t=t_a)
 
 
-        transient_problem = DirichletBCTransientNonlinearSolver(Constant(kappa), Constant(velocity), f, g, bcs, E_init=E_exact, time_control=time_control)
-        E_sol = transient_problem.E_sol
+            transient_problem = DirichletBCTransientNonlinearSolver(Constant(kappa), Constant(velocity), f, g, bcs, E_init=E_exact, time_control=time_control)
+            E_sol = transient_problem.E_sol
 
-        # extract solution at t=t_e
-        E_sol_te = transient_problem.E_sol[-1]
+            E_sols.append(E_sol)
+
         E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
                              E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, t=t_e)
         # exact solution at time t_e
         E_exact.t = t_e
         E_e = interpolate(E_exact, V)
-        diff = np.abs(EC.getAbsTemp(E_e.vector().array(), p_air) - EC.getAbsTemp(E_sol_te, p_air)).max()
-        print('Max error: {:2.3f} J kg-1'.format(diff))
+        # Max difference between exact solution and Crank-Nicolson
+        E_sol_te_cn = E_sols[0][-1]
+        diff_cn = np.abs(EC.getAbsTemp(E_e.vector().array(), p_air) - EC.getAbsTemp(E_sol_te_cn, p_air)).max()
+        # Max difference between exact solution and backward Euler
+        E_sol_te_be = E_sols[1][-1]
+        diff_bw = np.abs(EC.getAbsTemp(E_e.vector().array(), p_air) - EC.getAbsTemp(E_sol_te_be, p_air)).max()
+        print('\n--------------------------------------------------------')
+        print('Verification: transient diffusion\n')
+        print('Max error Crank-Nicolson: {:2.3f} K'.format(diff_cn))
+        print('Max error Backward-Euler: {:2.3f} K'.format(diff_bw))
+        print('--------------------------------------------------------\n')
         z = np.linspace(a, b, nx+1, endpoint=True)
         A = np.sqrt(2*np.pi/(2*kappa))
         period = 1
@@ -419,12 +434,20 @@ class Verification(object):
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
-        for k, sol in enumerate(E_sol):
+        for k in range(len(E_sols[0])):
             t = dt*k
-            ax.plot(EC.getAbsTemp(sol, p_air)[z<=20],'-', color='b')
+            depth = z[z<=20]
+            ax.plot(EC.getAbsTemp(E_sols[0][k], p_air)[z<=20], depth, '-', color='b')
+            ax.plot(EC.getAbsTemp(E_sols[1][k], p_air)[z<=20], depth, '-', color='r')
             E_e = E_0 + delta_E_0*np.exp(-A*z)*np.sin(2*np.pi/period*t-A*z)
-            ax.plot(EC.getAbsTemp(E_e, p_air)[z<20], ':', color='k')
-        plt.legend(['approx','exact'])
+            ax.plot(EC.getAbsTemp(E_e, p_air)[z<=20], depth, ':', color='k')
+
+    
+        ax.set_xlabel('temperature (K)')
+        ax.set_ylabel('depth below surface (m)')
+        ax.invert_yaxis()
+        plt.title('Verification: Transient Diffusion')
+        plt.legend(['Crank-Nicolson', 'Backward-Euler', 'exact solution'])
 
 
     def steady_state_diffusion(self):
@@ -456,12 +479,15 @@ class Verification(object):
         E_exact = Expression('E_surf + q_geo/k_i*c_i*x[0]', E_surf=E_surf, q_geo=q_geo, k_i=k_i, c_i=c_i)
         E_e = interpolate(E_exact, V)
         diff = np.abs(E_e.vector().array() - E_.vector().array()).max()
+        print('\n--------------------------------------------------------')
+        print('Verification: steady-state diffusion\n')
         print('Max error: {:2.3f} J kg-1'.format(diff))
+        print('--------------------------------------------------------\n')
 
 
     def run(self):
-        self.steady_state_diffusion()
         self.transient_diffusion()
+        self.steady_state_diffusion()
 
 
 # Set up the option parser
@@ -597,3 +623,6 @@ else:
     T = EC.getAbsTemp(E_sol[-1][::-1], p_air)
     ax.plot(T, depth)
     # ax.set_ylim(-50, 0)
+
+
+plt.show()
