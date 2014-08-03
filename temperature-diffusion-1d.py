@@ -66,7 +66,7 @@ t_e = 1
 dt = 1./12
 
 u_0 = -13
-delta_u_0 = 5.
+delta_u_0 = 7.
 u_surf = Expression('u_0 + delta_u_0*sin(2*pi/period*t)', u_0=u_0, delta_u_0=delta_u_0, period=period, t=t_a)
 u_base = Constant('-13.')
 
@@ -138,13 +138,19 @@ T = u_0 + delta_u_0*np.exp(-A*z)*np.sin(2*np.pi/period*t-A*z)
 #     ax.set_xlim(-20,0)
 #     ax.set_ylim(-1000, 0)
 
+
+# Plot analytical solution for Colle Gnifetti
 fig=plt.figure()
 ax = fig.add_subplot(111)
-for k, sol in enumerate(u_sol):
+for k in range(0, 12):
 
     t= k*dt
     print t
-    ax.plot(sol)
     T = u_0 + delta_u_0*np.exp(-A*z)*np.sin(2*np.pi/period*t-A*z)
-    ax.plot(T)
-    ax.set_xlim(0, 100)
+    print T
+    ax.plot( T[z<=20], z[z<=20], 'k')
+ax.set_xlabel('temperature (degC)')
+ax.set_ylabel('depth below surface (m)')
+ax.invert_yaxis()
+plt.savefig('colle-analytical.pdf')
+plt.show()

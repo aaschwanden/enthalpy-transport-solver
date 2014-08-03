@@ -615,13 +615,14 @@ else:
 
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    depth = -z[::-1]
-    T = EC.getAbsTemp(E_sol[0][::-1], p_air)
+    depth = z
+    T = EC.getAbsTemp(E_sol[0], p_air)
     ax.plot(T, depth)
-    T = EC.getAbsTemp(E_sol[100][::-1], p_air)
+    T = EC.getAbsTemp(E_sol[100], p_air)
     ax.plot(T, depth)
-    T = EC.getAbsTemp(E_sol[-1][::-1], p_air)
+    T = EC.getAbsTemp(E_sol[-1], p_air)
     ax.plot(T, depth)
+    ax.invert_yaxis()
     # ax.set_ylim(-50, 0)
 
 
