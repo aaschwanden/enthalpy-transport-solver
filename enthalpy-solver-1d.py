@@ -559,8 +559,10 @@ c_i = EC.config['c_i']
 k_i = EC.config['k_i']
 rho_i =  EC.config['rho_i']
 p_air = EC.config['p_air']
-kappa= k_i / c_i / rho_i * spa 
+kappa = k_i / c_i / rho_i * spa 
 
+kappa_str = 'E < 10000. ? 32. : 0'
+#kappa = Expression(kappa_str, E=E)
 f = 0  # no production
 velocity = 0  # zero velocity
 
@@ -600,7 +602,7 @@ else:
     E_exact = Expression('E_surf + q_geo/k_i*c_i*x[0]', E_surf=E_surf, q_geo=q_geo, k_i=k_i, c_i=c_i)
 
 
-    transient_problem = TransientNonlinearSolver(Constant(kappa), velocity, f, g, bcs, E_init=E_exact, time_control=time_control)
+    transient_problem = TransientNonlinearSolver(kappa_cold(E), velocity, f, g, bcs, E_init=E_exact, time_control=time_control)
     E_sol = transient_problem.E_sol
 
     z = np.linspace(a, b, nx+1, endpoint=True)
