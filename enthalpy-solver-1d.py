@@ -371,7 +371,8 @@ class Verification(object):
         k_i = EC.config['k_i']
         rho_i =  EC.config['rho_i']
         p_air = EC.config['p_air']
-        kappa= k_i / c_i / rho_i * spa 
+
+        kappa= k_i / c_i / rho_i * spa
 
         f = 0  # no production
         velocity = 0  # zero velocity
@@ -381,13 +382,13 @@ class Verification(object):
 
         E_0 = EC.getEnth(T_surf, 0., p_air)
         T_amplitude = 5.  # K (needs to be float!!)
-        period = 1
+        period = 1 
         T_plus  = T_surf+T_amplitude/2
         T_minus = T_surf-T_amplitude/2
         delta_E_0 = (EC.getEnth(T_plus, 0., p_air) - EC.getEnth(T_minus, 0., p_air))
         dt = 1./12 
         t_a = 0  # start at year zero
-        t_e = 1  # end at year one
+        t_e = 1 # end at year one
 
         thetas = [0.5, 1.0]
         E_sols = []
@@ -402,8 +403,8 @@ class Verification(object):
             bcs = [E_surf, E_base]
 
             # Define exact solution used as initial condition:
-            E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
-                                 E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, t=t_a)
+            E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi/period*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
+                                 E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, period=period, t=t_a)
 
 
             transient_problem = DirichletBCTransientNonlinearSolver(Constant(kappa), Constant(velocity), f, g, bcs, E_init=E_exact, time_control=time_control)
@@ -411,10 +412,10 @@ class Verification(object):
 
             E_sols.append(E_sol)
 
-        E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
-                             E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, t=t_e)
-        # exact solution at time t_e
+        E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi/period*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
+                             E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, period=period, t=t_e)
         E_exact.t = t_e
+
         E_e = interpolate(E_exact, V)
         # Max difference between exact solution and Crank-Nicolson
         E_sol_te_cn = E_sols[0][-1]
@@ -545,7 +546,7 @@ class Verification(object):
     def run(self):
         self.transient_diffusion()
         self.steady_state_diffusion()
-        self.steady_state_advection_diffusion()
+        #self.steady_state_advection_diffusion()
 
 
 # Set up the option parser
@@ -612,7 +613,7 @@ E_mid = E
 f = Constant(0.)
 ds = ds[boundary_parts]
 g = Constant(config['q_geo'])
-spa = 24 * 3600 * 365
+spa = 31556925.9747
 
 c_i = EC.config['c_i']
 k_i = EC.config['k_i']
