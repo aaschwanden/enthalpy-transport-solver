@@ -19,7 +19,7 @@ import numpy as np
 import pylab as plt
 from argparse import ArgumentParser
 
-set_log_level(ERROR)
+#set_log_level(ERROR)
 tol = 1E-14
 
 class EnthalpyConverter(object):
@@ -147,7 +147,7 @@ class EnthalpyConverter(object):
 
         if (depth > 0.):
             
-            return p_air * rho_i * g * depth
+            return p_air + rho_i * g * depth
 
         else:
 
@@ -179,7 +179,7 @@ class SteadyStateNonlinearSolver(object):
         prm['newton_solver']['absolute_tolerance'] = 1E-8
         prm['newton_solver']['relative_tolerance'] = 1E-7
         prm['newton_solver']['maximum_iterations'] = 25
-        prm['newton_solver']['relaxation_parameter'] = 1.0
+        prm['newton_solver']['relaxation_parameter'] = .8
         solver.solve()
 
         self.E_ = E_
@@ -305,7 +305,6 @@ class TransientNonlinearSolver(object):
 
         c_i = EC.config['c_i']
         k_i = EC.config['k_i']
-        kappa_0 = k_i / c_i / rho_i * spa 
         
         # We use the exact solution of the linear diffusion problem
         # as an initial condition at t=t_a
@@ -325,6 +324,7 @@ class TransientNonlinearSolver(object):
             # E_(n+theta)
             E_mid = (1.0-theta)*E_prev + theta*E
 
+            # kappa should be kappa_mid = kappa(E_mid)
             F = ((E-E_prev)*v*dx + dt*(inner(kappa*nabla_grad(E_mid), nabla_grad(v))*dx 
                 + inner(velocity*nabla_grad(E_mid), nabla_grad(v))*dx 
                                        + f*v*dx - g*v*ds(2)))
@@ -385,7 +385,7 @@ class Verification(object):
         T_plus  = T_surf+T_amplitude/2
         T_minus = T_surf-T_amplitude/2
         delta_E_0 = (EC.getEnth(T_plus, 0., p_air) - EC.getEnth(T_minus, 0., p_air))
-        dt = 1./12
+        dt = 1./12 
         t_a = 0  # start at year zero
         t_e = 1  # end at year one
 
@@ -454,7 +454,7 @@ class Verification(object):
         '''
         Verify the constant-coefficient steady-state diffusion problem
 
-        -div(kappa*nabla_grad(E) = 0
+        -div(kappa*nabla_grad(E)) = 0
         '''
 
         EC = self.EC
@@ -485,9 +485,67 @@ class Verification(object):
         print('--------------------------------------------------------\n')
 
 
+    def steady_state_advection_diffusion(self):
+        '''
+        Verify the constant-coefficient steady-state advection-diffusion problem
+
+        -div(kappa*nabla_grad(E)) - velocity*nabla_grad(E) = 0
+        '''
+        
+        from scipy.special import erf
+        EC = self.EC
+        c_i = EC.config['c_i']
+        k_i = EC.config['k_i']
+        p_air = EC.config['p_air']
+        q_geo = EC.config['q_geo']  # heat flux at the base
+
+        kappa = k_i / c_i / rho_i
+
+        f = 0  # no production
+        acab = 1./ spa   # m/s
+        velocity = Expression('(acab-acab/(b-a))*x[0]', acab=acab, a=a, b=b)
+
+        T_surf = 243.  #
+        E_surf = EC.getEnth(T_surf, 0., p_air)
+
+        bcs = [DirichletBC(V, E_surf, boundary_parts, 1)]
+
+        steady_state = SteadyStateNonlinearSolver(kappa, velocity, f, g, bcs)
+        steady_state.run()
+        E_ = steady_state.E_
+        E_sol = E_.vector().array()        
+        z = np.linspace(a, b, nx+1, endpoint=True)
+        l = np.sqrt(2*kappa*(b-a)/acab)
+        dTdz = -q_geo / k_i 
+        T_exact = T_surf + np.sqrt(np.pi)/2*l*dTdz*(erf((b-z)/l)-erf((b-a)/l))
+        print T_exact
+        print EC.getAbsTemp(E_sol, p_air)
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot(T_exact, z)
+        ax.set_xlabel('temperature (K)')
+        ax.set_ylabel('depth below surface (m)')
+        ax.invert_yaxis()
+
+        fig = plt.figure()
+        ax = fig.add_subplot(111)
+        ax.plot(EC.getAbsTemp(E_sol, p_air), z, '-', color='b')
+        ax.set_xlabel('temperature (K)')
+        ax.set_ylabel('depth below surface (m)')
+        ax.invert_yaxis()
+
+        # E_exact = Expression('E_surf - np.sqrt(np.pi)/2*l*G*erf(x[0]/l)-erf((b-a)/l)', E_surf=E_surf, q_geo=q_geo, k_i=k_i, c_i=c_i)
+        # E_e = interpolate(E_exact, V)
+        # diff = np.abs(E_e.vector().array() - E_.vector().array()).max()
+        # print('\n--------------------------------------------------------')
+        # print('Verification: steady-state diffusion\n')
+        # print('Max error: {:2.3f} J kg-1'.format(diff))
+        # print('--------------------------------------------------------\n')
+
     def run(self):
         self.transient_diffusion()
         self.steady_state_diffusion()
+        self.steady_state_advection_diffusion()
 
 
 # Set up the option parser
@@ -514,7 +572,7 @@ L = 3.34e5  # J kg-1
 rho_i = 910  # kg m-3
 T_melting = 273.15  # K
 T_0 = 223.15  # K
-g = 9.81  # m s-2
+g_acc = 9.81  # m s-2
 beta = 7.9e-8  # K Pa-1
 p_air = 1e5  # Pa
 q_geo = 0.042  # W m-2
@@ -522,7 +580,7 @@ kappa_0 = 1e-5
 
 
 config = dict(c_i=c_i, c_w=c_w, k_i=k_i, L=L, rho_i=rho_i, T_melting=T_melting, 
-              T_0=T_0, g=g, beta=beta, p_air=p_air, q_geo=q_geo)
+              T_0=T_0, g_acc=g_acc, beta=beta, p_air=p_air, q_geo=q_geo)
 
 EC = EnthalpyConverter(config)
 
@@ -550,19 +608,20 @@ Gamma_g.mark(boundary_parts, 2)
 # Define variational problem
 v  = TestFunction(V)
 E  = TrialFunction(V)
+E_mid = E
 f = Constant(0.)
 ds = ds[boundary_parts]
 g = Constant(config['q_geo'])
-spa = 24 * 3600 *365
+spa = 24 * 3600 * 365
 
 c_i = EC.config['c_i']
 k_i = EC.config['k_i']
 rho_i =  EC.config['rho_i']
 p_air = EC.config['p_air']
-kappa = k_i / c_i / rho_i * spa 
+g_acc = EC.config['g_acc']
+kappa_cold = k_i / c_i / rho_i * spa
+kappa_temperate = 1e-5 * spa
 
-kappa_str = 'E < 10000. ? 32. : 0'
-#kappa = Expression(kappa_str, E=E)
 f = 0  # no production
 velocity = 0  # zero velocity
 
@@ -581,28 +640,60 @@ t_e = 50000  # end at year one
 theta  = 0.5      # time stepping family, e.g. theta=1 -> backward Euler, theta=0.5 -> Crank-Nicolson
 
 time_control = dict(t_a=t_a, t_e=t_e, dt=dt, theta=theta)
-E_surf = Expression('E_0 + delta_E_0*sin(2*pi/period*t)', E_0=E_0, delta_E_0=delta_E_0, period=period, t=t_a)
+# E_surf = Expression('E_0 + delta_E_0*sin(2*pi/period*t)', E_0=E_0, delta_E_0=delta_E_0, period=period, t=t_a)
+E_surf = Constant(E_0)
 #E_base = EC.getEnth(T_base, 0., p_air)
 bcs = [E_surf]
 
 acab = 1
-velocity = Expression('acab-acab/(b-a)*x[0]', acab=acab, a=a, b=b)
+velocity = Expression('(acab-acab/(b-a))*x[0]', acab=acab, a=a, b=b)
 
+p = Expression('p_air + rho_i * g * x[0]', p_air=p_air, rho_i=rho_i, g=g_acc)
+T_pa = Expression('T_melting - beta * p', T_melting=T_melting, beta=beta, p=p)
+E_s = Expression('c_i * (T_pa - T_0)', c_i=c_i, T_pa=T_pa, T_0=T_0)
+
+def K_i(T):
+    '''
+    Temperature-dependent cold-ice thermal conductivity
+
+    Equation 4.36 in Greve & Blatter (2009)
+
+
+    '''
+    return 9.828*np.exp(-0.0057*T)
+
+def C_i(T):
+    '''
+    Temperature-dependent cold-ice heat capacity
+
+    Equation 4.39 in Greve & Blatter (2009)
+    '''
+
+    return (146.3 + 7.253*T)
+
+def Kappa_i(T):
+    '''
+    Temperature-dependent cold-ice diffusivity
+    '''
+    return K_i(T) / C_i(T) / rho_i
+
+
+def kappa(E):
+    condition = lt(E, E_s)
+    return conditional(condition, kappa_cold, kappa_temperate)
+
+
+    
 if do_verification:
     verify = Verification(EC)
     verify.run()
 else:
 
-    ## This needs to be turned into a FEniCS expression:
-    def kappa_cold(E):
-
-        return k_i / (146.3 + 7.253 * E / c_i) / rho_i * spa
-
     # Define exact solution used as initial condition:
     E_exact = Expression('E_surf + q_geo/k_i*c_i*x[0]', E_surf=E_surf, q_geo=q_geo, k_i=k_i, c_i=c_i)
 
-
-    transient_problem = TransientNonlinearSolver(kappa_cold(E), velocity, f, g, bcs, E_init=E_exact, time_control=time_control)
+    E_init = Expression('E_0', E_0=E_0, t=0)
+    transient_problem = TransientNonlinearSolver(kappa(E_mid), Constant(0), f, g, bcs, E_init=E_exact, time_control=time_control)
     E_sol = transient_problem.E_sol
 
     z = np.linspace(a, b, nx+1, endpoint=True)
@@ -619,9 +710,9 @@ else:
     ax = fig.add_subplot(111)
     depth = z
     T = EC.getAbsTemp(E_sol[0], p_air)
-    ax.plot(T, depth)
+#    ax.plot(T, depth)
     T = EC.getAbsTemp(E_sol[100], p_air)
-    ax.plot(T, depth)
+#    ax.plot(T, depth)
     T = EC.getAbsTemp(E_sol[-1], p_air)
     ax.plot(T, depth)
     ax.invert_yaxis()
