@@ -398,7 +398,8 @@ class Verification(object):
 
         kappa = k_i / c_i / rho_i
 
-        f = 0  # no production
+        f = Constant(0.)
+        g = Constant(q_geo/rho_i)
         velocity = 0  # zero velocity
 
         T_base = 260.
