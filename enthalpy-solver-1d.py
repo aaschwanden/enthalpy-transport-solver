@@ -366,6 +366,12 @@ class TransientNonlinearSolver(object):
             prm['newton_solver']['relaxation_parameter'] = 1.0
             solver.solve()
 
+            # Form representing the basal melt rate
+            term  = q_geo - (-rho_i * kappa * E_.dx(0))
+            q_friction = 0
+            Mb    = (q_friction + term) / (L * rho_i)
+            print Mb
+
             t += dt
 
             E_prev.assign(E_)
@@ -713,8 +719,9 @@ else:
 
     bcs = [E_surf]
 
+    Mb = 0
     acab = 1
-    velocity = Expression('(acab-acab/(b-a)*x[0])', acab=acab, a=a, b=b)
+    velocity = Expression('(acab-acab/(b-a)*x[0]+Mb)', acab=acab, a=a, b=b, Mb=Mb)
     
     E_init = Expression('E_0', E_0=E_0)
     transient_problem = TransientNonlinearSolver(kappa(E_mid), velocity, f, g, bcs, E_init=E_init, time_control=time_control)
