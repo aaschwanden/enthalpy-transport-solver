@@ -3,7 +3,7 @@ Nonlinear 1-D enthalpy transport equation with Dirichlet conditions
 at the surface and an inhomogeneous Neumann (flux) condition
 at the base. The domain is the interval from a to b
 -div(kappa(u)*nabla_grad(u) = 0,
-u = u_surf at x=a,u=u_base at x=b.
+u = u_surf at x=a, u=u_base at x=b.
 
 Solution method: automatic, i.e., by a NonlinearVariationalProblem/Solver
 (Newton method).
@@ -24,14 +24,14 @@ class SurfaceBoundary(SubDomain):
 
 class LowerBoundary(SubDomain):
     def inside(self, x, on_boundary):
-        return on_boundary and abs(x[0]-b) < tol
+        return on_boundary and abs(x[0] - b) < tol
 
 
 
 a = 0
 b = 1000
 nx = 1000
-depth = -np.linspace(a, b, nx+1, endpoint=True)
+depth = -np.linspace(a, b, nx + 1, endpoint=True)
 mesh = IntervalMesh(nx, a, b)
 ele_order = 1
 V = FunctionSpace(mesh, 'Lagrange', ele_order)
@@ -53,7 +53,7 @@ u  = TrialFunction(V)
 theta  = 0.5      # time stepping family, e.g. theta=1 -> backward Euler, theta=0.5 -> Crank-Nicolson
 
 # better use udunits
-spa = 365*24*3600
+spa = 365 * 24 * 3600
 
 c_i = 2009  # J kg-1 K-1
 k_i = 2.1  # J m-1 K-1 s-1
@@ -67,7 +67,8 @@ dt = 1./12
 
 u_0 = -13
 delta_u_0 = 7.
-u_surf = Expression('u_0 + delta_u_0*sin(2*pi/period*t)', u_0=u_0, delta_u_0=delta_u_0, period=period, t=t_a)
+u_surf = Expression('u_0 + delta_u_0 * sin(2 * pi / period * t)',
+                    u_0=u_0, delta_u_0=delta_u_0, period=period, t=t_a)
 u_base = Constant('-13.')
 
 bcs = [DirichletBC(V, u_surf, boundary_parts, 1), DirichletBC(V, u_base, boundary_parts, 2)]
@@ -78,7 +79,8 @@ bcs = [DirichletBC(V, u_surf, boundary_parts, 1), DirichletBC(V, u_base, boundar
 u_sol = []
 
 t = t_a
-u_exact = Expression('u_0 + delta_u_0*exp(-x[0]*sqrt(2*pi/(2*kappa)))*sin(2*pi/period*t-x[0]*sqrt(2*pi/(2*kappa)))', 
+u_exact = Expression('u_0 + delta_u_0 * exp(-x[0] * sqrt(2*pi/(2*kappa))) 
+* sin(2 * pi / period * t -x[0] * sqrt(2 * pi/(2 * kappa)))', 
                      u_0=u_0, delta_u_0=delta_u_0, kappa=kappa, period=period, t=t_a)
 
 u0 = interpolate(u_exact, V)
@@ -96,7 +98,7 @@ while t <= t_e:
 
     u_mid = (1.0-theta)*u_prev + theta*u
 
-    F = (u-u_prev)*v*dx + dt*(inner(kappa*nabla_grad(u_mid), nabla_grad(v))*dx)
+    F = (u - u_prev) * v * dx + dt * (inner(kappa * nabla_grad(u_mid), nabla_grad(v)) * dx)
     F  = action(F, u_)
     J = derivative(F, u_, u)
 
@@ -123,7 +125,7 @@ import pylab as plt
 period = 1
 z = np.linspace(a, b, nx+1, endpoint=True)
 A = np.sqrt(2*np.pi/(2*kappa))
-T = u_0 + delta_u_0*np.exp(-A*z)*np.sin(2*np.pi/period*t-A*z)
+T = u_0 + delta_u_0 * np.exp(-A * z) * np.sin(2 * np.pi / period * t - A * z)
 
 
 # for k, sol in enumerate(u_sol):
@@ -140,14 +142,11 @@ T = u_0 + delta_u_0*np.exp(-A*z)*np.sin(2*np.pi/period*t-A*z)
 
 
 # Plot analytical solution for Colle Gnifetti
-fig=plt.figure()
+fig = plt.figure()
 ax = fig.add_subplot(111)
 for k in range(0, 12):
-
-    t= k*dt
-    print t
-    T = u_0 + delta_u_0*np.exp(-A*z)*np.sin(2*np.pi/period*t-A*z)
-    print T
+    t= k * dt
+    T = u_0 + delta_u_0 * np.exp(-A * z) * np.sin(2 * np.pi / period * t - A * z)
     ax.plot( T[z<=20], z[z<=20], 'k')
 ax.set_xlabel('temperature (degC)')
 ax.set_ylabel('depth below surface (m)')

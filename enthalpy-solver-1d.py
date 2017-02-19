@@ -177,12 +177,12 @@ class SteadyStateNonlinearSolver(object):
         h      = 2 * CellSize(mesh)
 
         # skewed test function :
-        psihat = psi + h/2 * sign(velocity) * psi.dx(0)
+        psihat = psi + h / 2 * sign(velocity) * psi.dx(0)
 
-        F = (inner(kappa*nabla_grad(E), nabla_grad(psi))*dx 
-             + velocity*E.dx(0)*psihat*dx 
-             + f*psihat*dx - g*psihat*ds(2))
-
+        F =  (inner(kappa * nabla_grad(E), nabla_grad(psi)) * dx 
+             + velocity * E.dx(0) * psihat * dx 
+             + f * psihat * dx - g * psihat * ds(2)
+        )
 
         E_ = Function(V)  # most recently computed solution
         F  = action(F, E_)
@@ -263,11 +263,11 @@ class DirichletBCTransientNonlinearSolver(object):
             h      = 2 * CellSize(mesh)
 
             # skewed test function :
-            psihat = psi + h/2 * sign(velocity) * psi.dx(0)
+            psihat = psi + h / 2 * sign(velocity) * psi.dx(0)
 
-            F = ((E-E_prev)*psihat*dx + dt*(inner(kappa*nabla_grad(E_mid), nabla_grad(psi))*dx 
-                + velocity*E.dx(0)*psihat*dx 
-                + f*psihat*dx))
+            F = ((E - E_prev) * psihat * dx + dt * (inner(kappa * nabla_grad(E_mid), nabla_grad(psi)) * dx 
+                + velocity * E.dx(0) * psihat * dx 
+                + f * psihat * dx))
 
             F  = action(F, E_)
             J = derivative(F, E_, E)
@@ -402,7 +402,7 @@ class Verification(object):
         rho_i =  EC.config['rho_i']
         p_air = EC.config['p_air']
 
-        kappa = k_i / c_i / rho_i
+        kappa = k_i / (c_i * rho_i)
 
         f = Constant(0.)
         g = Constant(q_geo/rho_i)
@@ -414,8 +414,8 @@ class Verification(object):
         E_0 = EC.getEnth(T_surf, 0., p_air)
         T_amplitude = 5.  # K (needs to be float!!)
         period = 1 
-        T_plus  = T_surf+T_amplitude/2
-        T_minus = T_surf-T_amplitude/2
+        T_plus  = T_surf + T_amplitude/2
+        T_minus = T_surf - T_amplitude/2
         delta_E_0 = (EC.getEnth(T_plus, 0., p_air) - EC.getEnth(T_minus, 0., p_air))
         dt = 1./12 
         t_a = 0  # start at year zero
@@ -427,14 +427,15 @@ class Verification(object):
             time_control = dict(t_a=t_a, t_e=t_e, dt=dt, theta=theta)
 
             # Surface boundary condition
-            E_surf = Expression('E_0 + delta_E_0*sin(2*pi/period*t)', E_0=E_0, delta_E_0=delta_E_0, period=period, t=t_a)
+            E_surf = Expression('E_0 + delta_E_0 * sin(2 * pi / period * t)',
+                                E_0=E_0, delta_E_0=delta_E_0, period=period, t=t_a)
             # Basal boundary condition
             E_base = EC.getEnth(T_base, 0., p_air)
             # Combine boundary conditions
             bcs = [E_surf, E_base]
 
             # Define exact solution used as initial condition:
-            E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi/period*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
+            E_exact = Expression('E_0 + delta_E_0 * exp(-x[0] * sqrt((2 * pi)/(2 * kappa))) * sin(2 * pi / period * t - x[0] * sqrt((2 * pi)/(2 * kappa)))', 
                                  E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, period=period, t=t_a)
 
 
@@ -577,8 +578,11 @@ class Verification(object):
         print('--------------------------------------------------------\n')
 
     def run(self):
+        print('Running transient diffusion verification')
         self.transient_diffusion()
+        print('Running steady-sate diffusion verification')
         self.steady_state_diffusion()
+        print('Running steady-state advection-diffusion verification')
         self.steady_state_advection_diffusion()
 
 
@@ -632,7 +636,7 @@ class SurfaceBoundary(SubDomain):
 
 class LowerBoundary(SubDomain):
     def inside(self, x, on_boundary):
-        return on_boundary and abs(x[0]-b) < tol
+        return on_boundary and abs(x[0] - b) < tol
 
 boundary_parts = FacetFunction("size_t", mesh, 1)
 boundary_parts.set_all(0)
@@ -648,7 +652,7 @@ psi  = TestFunction(V)
 E  = TrialFunction(V)
 E_mid = E
 f = Constant(0.)
-ds = ds[boundary_parts]
+ds = ds(subdomain_data=boundary_parts)
 
 
 c_i = EC.config['c_i']
@@ -672,7 +676,7 @@ def K_i(T):
 
 
     '''
-    return 9.828*np.exp(-0.0057*T)
+    return 9.828 * np.exp(-0.0057 * T)
 
 def C_i(T):
     '''
@@ -681,7 +685,7 @@ def C_i(T):
     Equation 4.39 in Greve & Blatter (2009)
     '''
 
-    return (146.3 + 7.253*T)
+    return (146.3 + 7.253 * T)
 
 def Kappa_i(T):
     '''
@@ -694,7 +698,7 @@ def kappa(E):
     condition = lt(E, E_s)
     return conditional(condition, kappa_cold, kappa_temperate)
 
-
+ 
     
 if do_verification:
     verify = Verification(EC)
@@ -704,7 +708,7 @@ else:
     # This is a little example with a temperate base
 
     f = Constant(0.)
-    g = Constant(q_geo/rho_i)
+    g = Constant(q_geo / rho_i)
 
     T_surf = 270
     E_0 = EC.getEnth(T_surf, 0., p_air)
@@ -721,7 +725,7 @@ else:
 
     Mb = 0
     acab = 1
-    velocity = Expression('(acab-acab/(b-a)*x[0]+Mb)', acab=acab, a=a, b=b, Mb=Mb)
+    velocity = Expression('(acab-acab / (b-a) * x[0] + Mb)', acab=acab, a=a, b=b, Mb=Mb)
     
     E_init = Expression('E_0', E_0=E_0)
     transient_problem = TransientNonlinearSolver(kappa(E_mid), velocity, f, g, bcs, E_init=E_init, time_control=time_control)
