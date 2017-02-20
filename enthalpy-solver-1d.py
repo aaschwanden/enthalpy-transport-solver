@@ -105,14 +105,14 @@ class EnthalpyConverter(object):
         
         T_melting = self.config['T_melting']
         T = self.getAbsTemp(E, p)
-        T_pa = T - self.getMeltingTemp(p) + T_melting
+        T_pa = T - self.getMeltingTemp(p)
 
         return T_pa
 
 
     def isTemperate(E, p):
         
-        return (E>= self.getEnthalpyCTS(p))
+        return (E >= self.getEnthalpyCTS(p))
 
 
     def getWaterFraction(self, E, p):
@@ -256,8 +256,8 @@ class DirichletBCTransientNonlinearSolver(object):
             E_surf.t = t
             bcs = [DirichletBC(V, E_surf, boundary_parts, 1), DirichletBC(V, Constant(E_base), boundary_parts, 2)]
 
-            # E_(n+theta)
-            E_mid = (1.0-theta)*E_prev + theta*E
+            # E_ (n + theta)
+            E_mid = (1.0 - theta) * E_prev + theta * E
 
             # necessary quantities for streamline upwinding :
             h      = 2 * CellSize(mesh)
@@ -292,6 +292,7 @@ class DirichletBCTransientNonlinearSolver(object):
         self.E_ = E_
         self.E_sol = E_sol
 
+
 class TransientNonlinearSolver(object):
 
     def __init__(self, kappa, velocity, f, g, bcs, *args, **kwargs):
@@ -322,7 +323,6 @@ class TransientNonlinearSolver(object):
         E_surf.t = t_a
 
         E_ = Function(V)  # most recently computed solution
-
         
         # We use the exact solution of the linear diffusion problem
         # as an initial condition at t=t_a
@@ -340,7 +340,7 @@ class TransientNonlinearSolver(object):
             bcs = [DirichletBC(V, E_surf, boundary_parts, 1)]
 
             # E_(n+theta)
-            E_mid = (1.0-theta)*E_prev + theta*E
+            E_mid = (1.0 - theta) * E_prev + theta * E
 
             # necessary quantities for streamline upwinding :
             h      = 2 * CellSize(mesh)
@@ -349,7 +349,7 @@ class TransientNonlinearSolver(object):
             psihat = psi + h/2 * sign(velocity) * psi.dx(0)
 
             # kappa should be kappa_mid = kappa(E_mid)
-            F = ((E-E_prev)*psihat*dx + dt*(inner(kappa*nabla_grad(E_mid), nabla_grad(psi))*dx 
+            F = ((E - E_prev) * psihat * dx + dt * (inner(kappa * nabla_grad(E_mid), nabla_grad(psi)) * dx 
                 + velocity*E.dx(0)*psihat*dx 
                 + f*psihat*dx - g*psihat*ds(2)))
 
@@ -370,7 +370,6 @@ class TransientNonlinearSolver(object):
             term  = q_geo - (-rho_i * kappa * E_.dx(0))
             q_friction = 0
             Mb    = (q_friction + term) / (L * rho_i)
-            print Mb
 
             t += dt
 
@@ -393,7 +392,7 @@ class Verification(object):
         '''
         Verify the constant-coefficient transient diffusion problem
 
-        dEdt-div(kappa*nabla_grad(E) = 0
+        dEdt - div(kappa*nabla_grad(E) = 0
         '''
 
         EC = self.EC
@@ -405,7 +404,7 @@ class Verification(object):
         kappa = k_i / (c_i * rho_i)
 
         f = Constant(0.)
-        g = Constant(q_geo/rho_i)
+        g = Constant(q_geo / rho_i)
         velocity = 0  # zero velocity
 
         T_base = 260.
@@ -414,8 +413,8 @@ class Verification(object):
         E_0 = EC.getEnth(T_surf, 0., p_air)
         T_amplitude = 5.  # K (needs to be float!!)
         period = 1 
-        T_plus  = T_surf + T_amplitude/2
-        T_minus = T_surf - T_amplitude/2
+        T_plus  = T_surf + T_amplitude / 2
+        T_minus = T_surf - T_amplitude/ 2
         delta_E_0 = (EC.getEnth(T_plus, 0., p_air) - EC.getEnth(T_minus, 0., p_air))
         dt = 1./12 
         t_a = 0  # start at year zero
@@ -461,14 +460,14 @@ class Verification(object):
         print('Max error Backward-Euler: {:2.3f} K'.format(diff_bw))
         print('--------------------------------------------------------\n')
         z = np.linspace(a, b, nx+1, endpoint=True)
-        A = np.sqrt(2*np.pi/(2*kappa))
+        A = np.sqrt(2 * np.pi/ (2 * kappa))
         period = 1
 
         fig = plt.figure()
         ax = fig.add_subplot(111)
 
         for k in range(len(E_sols[0])):
-            t = dt*k
+            t = dt * k
             depth = z[z<=20]
             ax.plot(EC.getAbsTemp(E_sols[0][k], p_air)[z<=20], depth, '-', color='b')
             ax.plot(EC.getAbsTemp(E_sols[1][k], p_air)[z<=20], depth, '-', color='r')
@@ -627,7 +626,6 @@ config = dict(c_i=c_i, c_w=c_w, k_i=k_i, L=L, rho_i=rho_i, T_melting=T_melting,
 EC = EnthalpyConverter(config)
 
 
-
 # Define boundary conditions
 
 class SurfaceBoundary(SubDomain):
@@ -663,10 +661,11 @@ g_acc = EC.config['g_acc']
 kappa_cold = k_i / c_i / rho_i
 kappa_temperate = EC.config['kappa_0']
 
-
 p = Expression('p_air + rho_i * g * x[0]', p_air=p_air, rho_i=rho_i, g=g_acc)
-T_pa = Expression('T_melting - beta * p', T_melting=T_melting, beta=beta, p=p)
+T_pa_mp = Expression('T_melting - beta * p', T_melting=T_melting, beta=beta, p=p)
 E_s = Expression('c_i * (T_pa - T_0)', c_i=c_i, T_pa=T_pa, T_0=T_0)
+isTemperate = conditional(ge(E, E_s), 1, 0)
+
 
 def K_i(T):
     '''
@@ -713,7 +712,7 @@ else:
     T_surf = 270
     E_0 = EC.getEnth(T_surf, 0., p_air)
 
-    dt = 50
+    dt = 100
     t_a = 0  # start at year zero
     t_e = 5000  # end at year one
     theta  = 0.5      # time stepping family, e.g. theta=1 -> backward Euler, theta=0.5 -> Crank-Nicolson
@@ -725,7 +724,7 @@ else:
 
     Mb = 0
     acab = 1
-    velocity = Expression('(acab-acab / (b-a) * x[0] + Mb)', acab=acab, a=a, b=b, Mb=Mb)
+    velocity = Expression('(acab - (acab / (b-a)) * x[0] + Mb)', acab=acab, a=a, b=b, Mb=Mb)
     
     E_init = Expression('E_0', E_0=E_0)
     transient_problem = TransientNonlinearSolver(kappa(E_mid), velocity, f, g, bcs, E_init=E_init, time_control=time_control)
@@ -736,14 +735,15 @@ else:
     fig = plt.figure()
     ax = fig.add_subplot(111)
     depth = z
-    T = EC.getAbsTemp(E_sol[-1], p_air)
-    ax.plot(T, depth)
+    T = EC.getPATemp(E_sol[-1], p_air)
+    lT, = ax.plot(T, depth, color='#08519c', label='pressure-adjusted temperature')
     omega = EC.getWaterFraction(E_sol[-1], p_air)
     ax_o = ax.twiny()
-    ax_o.plot(omega, depth, ':', color='r')
-    ax.set_xlabel('temperature (K)')
+    lomega, = ax_o.plot(omega, depth, ':', color='#a50f15', label='water content')
+    ax.set_xlabel(u'temperature (\u00B0C)')
     ax_o.set_xlabel('liquid water fraction (-)')
     ax.set_ylabel('depth below surface (m)')
     ax.invert_yaxis()
+    # plt.legend(labels)
 
 plt.show()
