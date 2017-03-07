@@ -427,7 +427,7 @@ class Verification(object):
 
             # Surface boundary condition
             E_surf = Expression('E_0 + delta_E_0 * sin(2 * pi / period * t)',
-                                E_0=E_0, delta_E_0=delta_E_0, period=period, t=t_a)
+                                E_0=E_0, delta_E_0=delta_E_0, period=period, t=t_a, degree=1)
             # Basal boundary condition
             E_base = EC.getEnth(T_base, 0., p_air)
             # Combine boundary conditions
@@ -435,7 +435,7 @@ class Verification(object):
 
             # Define exact solution used as initial condition:
             E_exact = Expression('E_0 + delta_E_0 * exp(-x[0] * sqrt((2 * pi)/(2 * kappa))) * sin(2 * pi / period * t - x[0] * sqrt((2 * pi)/(2 * kappa)))', 
-                                 E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, period=period, t=t_a)
+                                 E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, period=period, t=t_a, degree=1)
 
 
             transient_problem = DirichletBCTransientNonlinearSolver(Constant(kappa), Constant(velocity), f, g, bcs, E_init=E_exact, time_control=time_control)
@@ -444,7 +444,7 @@ class Verification(object):
             E_sols.append(E_sol)
 
         E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi/period*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
-                             E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, period=period, t=t_e)
+                             E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, period=period, t=t_e, degree=1)
         E_exact.t = t_e
 
         E_e = interpolate(E_exact, V)
@@ -510,7 +510,7 @@ class Verification(object):
         steady_state = SteadyStateNonlinearSolver(kappa, velocity, f, g, bcs)
         steady_state.run()
         E_ = steady_state.E_
-        E_exact = Expression('E_surf + q_geo/k_i*c_i*x[0]', E_surf=E_surf, q_geo=q_geo, k_i=k_i, c_i=c_i)
+        E_exact = Expression('E_surf + q_geo/k_i*c_i*x[0]', E_surf=E_surf, q_geo=q_geo, k_i=k_i, c_i=c_i, degree=1)
         E_e = interpolate(E_exact, V)
         diff = np.abs(E_e.vector().array() - E_.vector().array()).max()
         print('\n--------------------------------------------------------')
@@ -661,9 +661,9 @@ g_acc = EC.config['g_acc']
 kappa_cold = k_i / c_i / rho_i
 kappa_temperate = EC.config['kappa_0']
 
-p = Expression('p_air + rho_i * g * x[0]', p_air=p_air, rho_i=rho_i, g=g_acc)
-T_pa_mp = Expression('T_melting - beta * p', T_melting=T_melting, beta=beta, p=p)
-E_s = Expression('c_i * (T_pa - T_0)', c_i=c_i, T_pa=T_pa, T_0=T_0)
+p = Expression('p_air + rho_i * g * x[0]', p_air=p_air, rho_i=rho_i, g=g_acc, degree=1)
+T_pa = Expression('T_melting - beta * p', T_melting=T_melting, beta=beta, p=p, degree=1)
+E_s = Expression('c_i * (T_pa - T_0)', c_i=c_i, T_pa=T_pa, T_0=T_0, degree=1)
 isTemperate = conditional(ge(E, E_s), 1, 0)
 
 
@@ -724,9 +724,9 @@ else:
 
     Mb = 0
     acab = 1
-    velocity = Expression('(acab - (acab / (b-a)) * x[0] + Mb)', acab=acab, a=a, b=b, Mb=Mb)
+    velocity = Expression('(acab - (acab / (b-a)) * x[0] + Mb)', acab=acab, a=a, b=b, Mb=Mb, degree=1)
     
-    E_init = Expression('E_0', E_0=E_0)
+    E_init = Expression('E_0', E_0=E_0, degree=1)
     transient_problem = TransientNonlinearSolver(kappa(E_mid), velocity, f, g, bcs, E_init=E_init, time_control=time_control)
     E_sol = transient_problem.E_sol
 
