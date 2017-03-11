@@ -3,9 +3,10 @@ Nonlinear 1-D enthalpy transport equation with Dirichlet conditions
 at the surface and an inhomogeneous Neumann (flux) condition
 at the base. The domain is the interval from a to b.
 Stationary Solver:
--div(q(E)*nabla_grad(E) + velocity*nabla_grad(e)) = f,
+-div(q(E)*nabla_grad(E) + velocity*nabla_grad(E)) = f,
 E = E_surf at x=a, dE/dn=g at x=b.
-dEdt-div(q(E)*nabla_grad(E) + velocity*nabla_grad(e)) = f,
+Transient Solver:
+dEdt-div(q(E)*nabla_grad(E) + velocity*nabla_grad(E)) = f,
 
 Solution method: automatic, i.e., by a NonlinearVariationalProblem/Solver
 (Newton method).
@@ -346,12 +347,12 @@ class TransientNonlinearSolver(object):
             h      = 2 * CellSize(mesh)
 
             # skewed test function :
-            psihat = psi + h/2 * sign(velocity) * psi.dx(0)
+            psihat = psi + h / 2 * sign(velocity) * psi.dx(0)
 
             # kappa should be kappa_mid = kappa(E_mid)
             F = ((E - E_prev) * psihat * dx + dt * (inner(kappa * nabla_grad(E_mid), nabla_grad(psi)) * dx 
-                + velocity*E.dx(0)*psihat*dx 
-                + f*psihat*dx - g*psihat*ds(2)))
+                + velocity *E.dx(0) * psihat * dx 
+                + f * psihat * dx - g * psihat * ds(2)))
 
             F = action(F, E_)
             J = derivative(F, E_, E)
