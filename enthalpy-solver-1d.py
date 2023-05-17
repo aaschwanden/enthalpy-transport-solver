@@ -14,7 +14,7 @@ Solution method: automatic, i.e., by a NonlinearVariationalProblem/Solver
 ToDo: currently the pressure has to be a scalar in the EnthalpyConverter
 """
 
-from dolfin import *
+from firedrake import *
 import sys
 import numpy as np
 import pylab as plt
@@ -194,10 +194,6 @@ class SteadyStateNonlinearSolver(object):
         solver  = NonlinearVariationalSolver(problem)
         prm = solver.parameters
         info(prm, True)
-        prm['newton_solver']['absolute_tolerance'] = 1E-8
-        prm['newton_solver']['relative_tolerance'] = 1E-7
-        prm['newton_solver']['maximum_iterations'] = 25
-        prm['newton_solver']['relaxation_parameter'] = .8
         solver.solve()
 
         self.E_ = E_
@@ -426,17 +422,16 @@ class Verification(object):
         for theta in thetas:
             time_control = dict(t_a=t_a, t_e=t_e, dt=dt, theta=theta)
 
+            t = 0
             # Surface boundary condition
-            E_surf = Expression('E_0 + delta_E_0 * sin(2 * pi / period * t)',
-                                E_0=E_0, delta_E_0=delta_E_0, period=period, t=t_a, degree=1)
+            E_surf = interpolate(E_0 + delta_E_0 * sin(2 * pi / period * t), V)
             # Basal boundary condition
             E_base = EC.getEnth(T_base, 0., p_air)
             # Combine boundary conditions
             bcs = [E_surf, E_base]
 
             # Define exact solution used as initial condition:
-            E_exact = Expression('E_0 + delta_E_0 * exp(-x[0] * sqrt((2 * pi)/(2 * kappa))) * sin(2 * pi / period * t - x[0] * sqrt((2 * pi)/(2 * kappa)))', 
-                                 E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, period=period, t=t_a, degree=1)
+            E_exact = interpolate(E_0 + delta_E_0 * exp(-x[0] * sqrt((2 * pi)/(2 * kappa))) * sin(2 * pi / period * t - x[0] * sqrt((2 * pi)/(2 * kappa))), V)
 
 
             transient_problem = DirichletBCTransientNonlinearSolver(Constant(kappa), Constant(velocity), f, g, bcs, E_init=E_exact, time_control=time_control)
@@ -444,8 +439,7 @@ class Verification(object):
 
             E_sols.append(E_sol)
 
-        E_exact = Expression('E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi/period*t-x[0]*sqrt((2*pi)/(2*kappa)))', 
-                             E_0=E_0, delta_E_0=delta_E_0, kappa=kappa, period=period, t=t_e, degree=1)
+        E_exact = interpolate(E_0 + delta_E_0*exp(-x[0]*sqrt((2*pi)/(2*kappa)))*sin(2*pi/period*t-x[0]*sqrt((2*pi)/(2*kappa))), V)
         E_exact.t = t_e
 
         E_e = interpolate(E_exact, V)
@@ -541,12 +535,12 @@ class Verification(object):
 
         f = 0  # no production
         acab = 1 # m/a
-        velocity = Expression('(acab-acab/(b-a)*x[0])', acab=acab, a=a, b=b)
+        velocity = interpolate(acab-acab/(b-a)*x[0], V)
 
         T_surf = 253.  #
         E_surf = EC.getEnth(T_surf, 0., p_air)
 
-        bcs = [DirichletBC(V, E_surf, boundary_parts, 1)]
+        bcs = [DirichletBC(V, E_surf, 1)]
 
         steady_state = SteadyStateNonlinearSolver(kappa, velocity, f, g, bcs)
         steady_state.run()
@@ -629,29 +623,19 @@ EC = EnthalpyConverter(config)
 
 # Define boundary conditions
 
-class SurfaceBoundary(SubDomain):
-    def inside(self, x, on_boundary):
-        return on_boundary and abs(x[0]) < tol
+# class SurfaceBoundary(SubDomain):
+#     def inside(self, x, on_boundary):
+#         return on_boundary and abs(x[0]) < tol
 
-class LowerBoundary(SubDomain):
-    def inside(self, x, on_boundary):
-        return on_boundary and abs(x[0] - b) < tol
-
-boundary_parts = FacetFunction("size_t", mesh, 1)
-boundary_parts.set_all(0)
-
-Gamma_d = SurfaceBoundary()
-Gamma_d.mark(boundary_parts, 1)
-
-Gamma_g = LowerBoundary()
-Gamma_g.mark(boundary_parts, 2)
+# class LowerBoundary(SubDomain):
+#     def inside(self, x, on_boundary):
+#         return on_boundary and abs(x[0] - b) < tol
 
 # Define variational problem
 psi  = TestFunction(V)
 E  = TrialFunction(V)
 E_mid = E
 f = Constant(0.)
-ds = ds(subdomain_data=boundary_parts)
 
 
 c_i = EC.config['c_i']
@@ -662,9 +646,11 @@ g_acc = EC.config['g_acc']
 kappa_cold = k_i / c_i / rho_i
 kappa_temperate = EC.config['kappa_0']
 
-p = Expression('p_air + rho_i * g * x[0]', p_air=p_air, rho_i=rho_i, g=g_acc, degree=1)
-T_pa = Expression('T_melting - beta * p', T_melting=T_melting, beta=beta, p=p, degree=1)
-E_s = Expression('c_i * (T_pa - T_0)', c_i=c_i, T_pa=T_pa, T_0=T_0, degree=1)
+x = SpatialCoordinate(V.mesh())
+
+p = interpolate(p_air + rho_i * g_acc * x[0], V)
+T_pa = interpolate(T_melting - beta * p, V)
+E_s = interpolate(c_i * (T_pa - T_0), V)
 isTemperate = conditional(ge(E, E_s), 1, 0)
 
 
@@ -725,9 +711,9 @@ else:
 
     Mb = 0
     acab = 1
-    velocity = Expression('(acab - (acab / (b-a)) * x[0] + Mb)', acab=acab, a=a, b=b, Mb=Mb, degree=1)
+    velocity = interpolate((acab - (acab / (b-a)) * x[0] + Mb), V)
     
-    E_init = Expression('E_0', E_0=E_0, degree=1)
+    E_init = interpolate(E_0, V)
     transient_problem = TransientNonlinearSolver(kappa(E_mid), velocity, f, g, bcs, E_init=E_init, time_control=time_control)
     E_sol = transient_problem.E_sol
 
